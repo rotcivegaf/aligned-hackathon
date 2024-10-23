@@ -1,11 +1,25 @@
+use clap::Parser;
 use serde::{Deserialize, Serialize};
 
 use ruscii::app::{App, State};
 use ruscii::drawing::Pencil;
 use ruscii::gui::FPSCounter;
-use ruscii::keyboard::{Key, KeyEvent};
 use ruscii::spatial::Vec2;
 use ruscii::terminal::{Color, Style, Window};
+
+/// The arguments for the command.
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct Args {
+    #[clap(long)]
+    execute: bool,
+
+    #[clap(long)]
+    prove: bool,
+
+    #[clap(long)]
+    output: String,
+}
 
 struct GameState {
     pub dimension: Vec2,
@@ -162,60 +176,57 @@ impl GameState {
     }
 }
 
-fn main() {
+fn main() -> std::io::Result<()> {
     let mut app = App::default();
     let mut state = GameState::new(Vec2::xy(60, 22));
     let mut fps_counter = FPSCounter::default();
-    let mut end_frame = 0;
+    
+    let args = Args::parse();
+    let output: Output = serde_json::from_str(&args.output).unwrap();
 
+    println!("output ori: {}", output.inputs);
+    println!("output ori: {}", output.score);
+    println!("output ori: {}", output.win);
+    println!("output ori: {}", output.end_frame);
+
+    let mut user_output = hex_string_to_vec(&output.inputs);
+
+    let mut actual_frame: Vec<(u16, u8)> = get_and_remove_first_equal_numbers(&mut user_output);
+    
     app.run(|app_state: &mut State, window: &mut Window| {
         if state.aliens.is_empty() || state.lives == 0 {
-            end_frame = app_state.step();
-            app_state.stop();
-            return;
-        }
-        if app_state.step() == 4095 {
-            end_frame = app_state.step();
             app_state.stop();
             return;
         }
 
-        for key_event in app_state.keyboard().last_key_events() {
-            match key_event {
-                KeyEvent::Pressed(Key::Esc) | KeyEvent::Pressed(Key::Q) => {
-                    end_frame = app_state.step();
-                    app_state.stop();
-                    return;
-                },
-                _ => (),
-            }
+        if output.end_frame == app_state.step() as u16 {
+            app_state.stop();
+            return;
         }
-
-        let mut frame_pencil = Pencil::new(window.canvas_mut());
-        frame_pencil.draw_text(&format!("Frame: {}", app_state.step()), Vec2::xy(1, 10));
         
-        let mut user_input_pencil = Pencil::new(window.canvas_mut());
-        if let Some((num, key)) = state.user_input.last() {
-            user_input_pencil.draw_text(&format!("User input frame: {}", num), Vec2::xy(1, 2));
-            user_input_pencil.draw_text(&format!("User input key: {}", key), Vec2::xy(1, 3));
-        } else{
-            user_input_pencil.draw_text(&format!("User input frame: null"), Vec2::xy(1, 2));
-            user_input_pencil.draw_text(&format!("User input key: null"), Vec2::xy(1, 3));
-        }
-
-        for key_down in app_state.keyboard().get_keys_down() {
-            match key_down {
-                Key::A => {
+        if actual_frame[0].0 == app_state.step() as u16 {
+            if actual_frame[0].1 == 0 {
+                state.spaceship_move_x(-1);
+                state.user_input.push((app_state.step() as u16, 0));
+            } else {
+                state.spaceship_move_x(1);
+                state.user_input.push((app_state.step() as u16, 1));
+            }
+            if actual_frame.len() == 2 {
+                if actual_frame[1].1 == 0 {
                     state.spaceship_move_x(-1);
                     state.user_input.push((app_state.step() as u16, 0));
-                },
-                Key::D => {
+                } else {
                     state.spaceship_move_x(1);
                     state.user_input.push((app_state.step() as u16, 1));
-                },
-                _ => (),
+                }
+            }
+            
+            if !user_output.is_empty() {
+                actual_frame = get_and_remove_first_equal_numbers(&mut user_output);
             }
         }
+
         state.spaceship_shot(app_state.step());
 
         state.update(app_state.step());
@@ -223,7 +234,6 @@ fn main() {
 
         let win_size = window.size();
         let mut pencil = Pencil::new(window.canvas_mut());
-        pencil.draw_text(&format!("FPS: {}", fps_counter.count()), Vec2::xy(1, 0));
 
         pencil.set_origin((win_size - state.dimension) / 2);
         pencil.draw_text(
@@ -252,29 +262,38 @@ fn main() {
             pencil.draw_char('|', *shot);
         }
     });
+    
+    println!("--------------------------------------");
+    println!();
 
-    //for (i, vector) in state.user_input.iter().enumerate() {
-    //    for (num, key) in vector {
-    //        println!("Vector {} - Número: {}, Key ID: {}", i, num, key);
-    //    }
-    //}
-
-    let output = Output {
+    let state_output = Output {
         inputs: vec_to_hex_string(state.user_input),
         score: state.score,
         win: state.lives > 0,
-        end_frame: end_frame as u16,
+        end_frame: 0,
     };
-    
-    println!("{}", output.inputs);
-    println!("{}", output.score);
-    println!("{}", output.win);
-    println!("{}", output.end_frame);
+    println!("{}", state_output.inputs);
+    println!("{}", state_output.score);
+    println!("{}", state_output.win);
 
-    let serialized = serde_json::to_string(&output).unwrap();
+    let serialized = serde_json::to_string(&state_output).unwrap();
     println!("{}", serialized);
-}
 
+    if output.inputs != state_output.inputs { // check inputs
+        eprintln!("Error: inputs doesn't match, {}, {}", output.inputs, state_output.inputs);
+        std::process::exit(1);
+    }
+    if output.score != state_output.score { // check score
+        eprintln!("Error: score doesn't match, {}, {}", output.score, state_output.score);
+        std::process::exit(1);
+    }
+    if output.win != state_output.win { // check win
+        eprintln!("Error: win doesn't match, {}, {}", output.win, state_output.win);
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
 
 fn vec_to_hex_string(input: Vec<(u16, u8)>) -> String {
     let mut result = String::new();
@@ -291,6 +310,58 @@ fn vec_to_hex_string(input: Vec<(u16, u8)>) -> String {
 
         // Convertir los bytes a hexadecimal y añadir al string
         result.push_str(&format!("{:02X}{:02X}", byte1, byte2));
+    }
+
+    result
+}
+
+fn hex_string_to_vec(hex_string: &str) -> Vec<(u16, u8)> {
+    let mut result = Vec::new();
+
+    // Asegurarse de que la longitud de la cadena sea par y que tenga pares de caracteres
+    if hex_string.len() % 4 != 0 {
+        panic!("La longitud de la cadena debe ser múltiplo de 4");
+    }
+
+    // Iterar sobre la cadena en chunks de 4 caracteres (2 bytes)
+    for chunk in hex_string.as_bytes().chunks(4) {
+        // Convertir los dos primeros caracteres en un byte (byte1)
+        let byte1_str = std::str::from_utf8(&chunk[0..2]).unwrap();
+        let byte1 = u8::from_str_radix(byte1_str, 16).unwrap();
+
+        // Convertir los dos siguientes caracteres en un byte (byte2)
+        let byte2_str = std::str::from_utf8(&chunk[2..4]).unwrap();
+        let byte2 = u8::from_str_radix(byte2_str, 16).unwrap();
+
+        // Reconstruir el u16 (12 bits) y el booleano u8
+        let num: u16 = ((byte1 as u16) << 4) | ((byte2 as u16) >> 4);
+        let boolean: u8 = byte2 & 0x01;
+
+        // Añadir el par (u16, u8) al resultado
+        result.push((num, boolean));
+    }
+
+    result
+}
+
+fn get_and_remove_first_equal_numbers(input: &mut Vec<(u16, u8)>) -> Vec<(u16, u8)> {
+    let mut result = Vec::new();
+
+    // Comprobar si el vector está vacío
+    if input.is_empty() {
+        return result; // Devuelve un vector vacío si no hay elementos
+    }
+
+    let first_value = input[0].0; // Obtener el primer valor (u16)
+
+    // Iterar sobre el vector y buscar elementos iguales al primer valor
+    while let Some(&(num, boolean)) = input.first() {
+        if num == first_value {
+            result.push((num, boolean)); // Añadir el valor a los resultados
+            input.remove(0); // Eliminar el primer elemento del vector
+        } else {
+            break; // Salir si el valor cambia
+        }
     }
 
     result
