@@ -1,0 +1,7 @@
+/target
+/program/target/
+/script/target/
+/prove/target/
+/nonce_*
+/aligned_verification_data/
+/prove/proof.bin
