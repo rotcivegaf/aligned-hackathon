@@ -1,24 +1,15 @@
-use clap::Parser;
 use serde::{Deserialize, Serialize};
 
-use ruscii::app::{App, State};
-use ruscii::drawing::Pencil;
-use ruscii::gui::FPSCounter;
-use ruscii::spatial::Vec2;
-use ruscii::terminal::{Color, Style, Window};
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct Vec2 {
+    x: i32,
+    y: i32,
+}
 
-/// The arguments for the command.
-#[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None)]
-struct Args {
-    #[clap(long)]
-    execute: bool,
-
-    #[clap(long)]
-    prove: bool,
-
-    #[clap(long)]
-    output: String,
+impl Vec2 {
+    pub fn xy(x: i32, y: i32) -> Vec2 {
+        Vec2 { x, y }
+    }
 }
 
 struct GameState {
@@ -48,7 +39,7 @@ impl GameState {
     pub fn new(dimension: Vec2) -> GameState {
         let mut aliens = Vec::new();
         for y in 3..7 {
-            for x in 5..dimension.x - 5 {
+            for x in 25..dimension.x - 25 {
                 if x % 2 != 0 {
                     aliens.push(Vec2::xy(x, y));
                 }
@@ -177,118 +168,70 @@ impl GameState {
 }
 
 fn main() -> std::io::Result<()> {
-    let mut app = App::default();
     let mut state = GameState::new(Vec2::xy(60, 22));
-    let mut fps_counter = FPSCounter::default();
+    let zkinput = sp1_zkvm::io::read::<String>();
+
+    let output: Output = serde_json::from_str(&zkinput).unwrap();
     
-    let args = Args::parse();
-    let output: Output = serde_json::from_str(&args.output).unwrap();
-
-    println!("output ori: {}", output.inputs);
-    println!("output ori: {}", output.score);
-    println!("output ori: {}", output.win);
-    println!("output ori: {}", output.end_frame);
-
-    let mut user_output = hex_string_to_vec(&output.inputs);
-
-    let mut actual_frame: Vec<(u16, u8)> = get_and_remove_first_equal_numbers(&mut user_output);
+    let user_outputs = hex_string_to_vec(&output.inputs);
     
-    app.run(|app_state: &mut State, window: &mut Window| {
-        if state.aliens.is_empty() || state.lives == 0 {
-            app_state.stop();
-            return;
-        }
-
-        if output.end_frame == app_state.step() as u16 {
-            app_state.stop();
-            return;
-        }
-        
-        if actual_frame[0].0 == app_state.step() as u16 {
-            if actual_frame[0].1 == 0 {
-                state.spaceship_move_x(-1);
-                state.user_input.push((app_state.step() as u16, 0));
-            } else {
-                state.spaceship_move_x(1);
-                state.user_input.push((app_state.step() as u16, 1));
-            }
-            if actual_frame.len() == 2 {
-                if actual_frame[1].1 == 0 {
-                    state.spaceship_move_x(-1);
-                    state.user_input.push((app_state.step() as u16, 0));
-                } else {
-                    state.spaceship_move_x(1);
-                    state.user_input.push((app_state.step() as u16, 1));
-                }
-            }
-            
-            if !user_output.is_empty() {
-                actual_frame = get_and_remove_first_equal_numbers(&mut user_output);
-            }
-        }
-
-        state.spaceship_shot(app_state.step());
-
-        state.update(app_state.step());
-        fps_counter.update();
-
-        let win_size = window.size();
-        let mut pencil = Pencil::new(window.canvas_mut());
-
-        pencil.set_origin((win_size - state.dimension) / 2);
-        pencil.draw_text(
-            &format!("lives: {}  -  score: {}", state.lives, state.score),
-            Vec2::xy(15, 0),
-        );
-        pencil.set_foreground(Color::Cyan);
-        pencil.draw_char('^', state.spaceship);
-        pencil.draw_char('/', state.spaceship - Vec2::x(1));
-        pencil.draw_char('\\', state.spaceship + Vec2::x(1));
-        pencil.draw_char('\'', state.spaceship + Vec2::y(1));
-
-        pencil.set_foreground(Color::Red);
-        for shot in &state.aliens_shots {
-            pencil.draw_char('|', *shot);
-        }
-
-        pencil.set_foreground(Color::Green);
-        for alien in &state.aliens {
-            pencil.draw_char('W', *alien);
-        }
-
-        pencil.set_foreground(Color::Yellow);
-        pencil.set_style(Style::Bold);
-        for shot in &state.spaceship_shots {
-            pencil.draw_char('|', *shot);
-        }
-    });
-    
-    println!("--------------------------------------");
-    println!();
-
-    let state_output = Output {
-        inputs: vec_to_hex_string(state.user_input),
-        score: state.score,
-        win: state.lives > 0,
+    let mut state_output = Output {
+        inputs: String::new(),
+        score: 0,
+        win: false,
         end_frame: 0,
     };
-    println!("{}", state_output.inputs);
-    println!("{}", state_output.score);
-    println!("{}", state_output.win);
+    
+    let mut frame_count = 0; 
+    let mut n_user_output = 0;
 
-    let serialized = serde_json::to_string(&state_output).unwrap();
-    println!("{}", serialized);
+    while !state.aliens.is_empty() && state.lives > 0 {
+        if frame_count == 1023 {
+            break;
+        }
 
-    if output.inputs != state_output.inputs { // check inputs
-        eprintln!("Error: inputs doesn't match, {}, {}", output.inputs, state_output.inputs);
+        if n_user_output < user_outputs.len() {
+            let user_output = user_outputs[n_user_output];
+
+            //eprintln!("user_output.0, {:?}", user_output.0);
+            //eprintln!("frame_count, {:?}", frame_count);
+            //eprintln!("user_output.0, {:?}", user_output.0 == frame_count as u16);
+            
+            if user_output.0 == frame_count as u16 {
+                if user_output.1 == 0 {
+                    state.spaceship_move_x(-1);
+                } else {
+                    state.spaceship_move_x(1);
+                }
+                state.user_input.push((frame_count as u16, user_output.1));
+
+                //eprintln!("UPPP");
+                n_user_output += 1;
+            }
+        }
+
+        state.spaceship_shot(frame_count);
+        state.update(frame_count);
+        frame_count += 1;
+    }
+
+    state_output.inputs = vec_to_hex_string(state.user_input);
+
+    if output.inputs != state_output.inputs {
+        eprintln!("Error: inputs don't match, {}, {}", output.inputs, state_output.inputs);
         std::process::exit(1);
     }
-    if output.score != state_output.score { // check score
-        eprintln!("Error: score doesn't match, {}, {}", output.score, state_output.score);
+    if output.score != state.score {
+        eprintln!("Error: score doesn't match, {}, {}", output.score, state.score);
         std::process::exit(1);
     }
-    if output.win != state_output.win { // check win
+    state_output.win = state.lives > 0;
+    if output.win != state_output.win {
         eprintln!("Error: win doesn't match, {}, {}", output.win, state_output.win);
+        std::process::exit(1);
+    }
+    if output.end_frame != frame_count as u16 {
+        eprintln!("Error: end_frame doesn't match, {}, {}", output.end_frame, frame_count);
         std::process::exit(1);
     }
 
@@ -299,14 +242,14 @@ fn vec_to_hex_string(input: Vec<(u16, u8)>) -> String {
     let mut result = String::new();
 
     for (num, boolean) in input {
-        assert!(num <= 4095);
-        assert!(boolean <= 1);
+        assert!(num < 1024); // Ahora el número máximo es 1023 (10 bits)
+        assert!(boolean < 2); // Booleano, solo acepta 0 o 1
 
         // Primer byte: los primeros 8 bits del u16
-        let byte1 = (num >> 4) as u8;
+        let byte1 = (num >> 2) as u8;
 
-        // Segundo byte: los últimos 4 bits del u16 y el u8 (booleano)
-        let byte2 = ((num & 0x0F) << 4) as u8 | (boolean & 0x01);
+        // Segundo byte: los últimos 2 bits del u16 y el booleano
+        let byte2 = ((num & 0x03) << 6) as u8 | (boolean & 0x01);
 
         // Convertir los bytes a hexadecimal y añadir al string
         result.push_str(&format!("{:02X}{:02X}", byte1, byte2));
@@ -318,7 +261,7 @@ fn vec_to_hex_string(input: Vec<(u16, u8)>) -> String {
 fn hex_string_to_vec(hex_string: &str) -> Vec<(u16, u8)> {
     let mut result = Vec::new();
 
-    // Asegurarse de que la longitud de la cadena sea par y que tenga pares de caracteres
+    // Asegurarse de que la longitud de la cadena sea par
     if hex_string.len() % 4 != 0 {
         panic!("La longitud de la cadena debe ser múltiplo de 4");
     }
@@ -334,34 +277,12 @@ fn hex_string_to_vec(hex_string: &str) -> Vec<(u16, u8)> {
         let byte2 = u8::from_str_radix(byte2_str, 16).unwrap();
 
         // Reconstruir el u16 (12 bits) y el booleano u8
-        let num: u16 = ((byte1 as u16) << 4) | ((byte2 as u16) >> 4);
+        //let num: u16 = ((byte1 as u16) << 4) | ((byte2 as u16) >> 4);
+        let num: u16 = (byte1 as u16) << 2 | (byte2 >> 6) as u16;
         let boolean: u8 = byte2 & 0x01;
 
         // Añadir el par (u16, u8) al resultado
         result.push((num, boolean));
-    }
-
-    result
-}
-
-fn get_and_remove_first_equal_numbers(input: &mut Vec<(u16, u8)>) -> Vec<(u16, u8)> {
-    let mut result = Vec::new();
-
-    // Comprobar si el vector está vacío
-    if input.is_empty() {
-        return result; // Devuelve un vector vacío si no hay elementos
-    }
-
-    let first_value = input[0].0; // Obtener el primer valor (u16)
-
-    // Iterar sobre el vector y buscar elementos iguales al primer valor
-    while let Some(&(num, boolean)) = input.first() {
-        if num == first_value {
-            result.push((num, boolean)); // Añadir el valor a los resultados
-            input.remove(0); // Eliminar el primer elemento del vector
-        } else {
-            break; // Salir si el valor cambia
-        }
     }
 
     result

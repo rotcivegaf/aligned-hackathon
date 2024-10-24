@@ -34,7 +34,7 @@ impl GameState {
     pub fn new(dimension: Vec2) -> GameState {
         let mut aliens = Vec::new();
         for y in 3..7 {
-            for x in 5..dimension.x - 5 {
+            for x in 25..dimension.x - 25 {
                 if x % 2 != 0 {
                     aliens.push(Vec2::xy(x, y));
                 }
@@ -174,7 +174,7 @@ fn main() {
             app_state.stop();
             return;
         }
-        if app_state.step() == 4095 {
+        if app_state.step() == 1023 {
             end_frame = app_state.step();
             app_state.stop();
             return;
@@ -208,10 +208,12 @@ fn main() {
                 Key::A => {
                     state.spaceship_move_x(-1);
                     state.user_input.push((app_state.step() as u16, 0));
+                    break;
                 },
                 Key::D => {
                     state.spaceship_move_x(1);
                     state.user_input.push((app_state.step() as u16, 1));
+                    break;
                 },
                 _ => (),
             }
@@ -271,26 +273,58 @@ fn main() {
     println!("{}", output.win);
     println!("{}", output.end_frame);
 
+    let user_output = hex_string_to_vec(&output.inputs);
+    println!("{:?}", user_output);
+
     let serialized = serde_json::to_string(&output).unwrap();
     println!("{}", serialized);
 }
-
 
 fn vec_to_hex_string(input: Vec<(u16, u8)>) -> String {
     let mut result = String::new();
 
     for (num, boolean) in input {
-        assert!(num <= 4095);
-        assert!(boolean <= 1);
+        assert!(num < 1024); // Ahora el número máximo es 1023 (10 bits)
+        assert!(boolean < 2); // Booleano, solo acepta 0 o 1
 
         // Primer byte: los primeros 8 bits del u16
-        let byte1 = (num >> 4) as u8;
+        let byte1 = (num >> 2) as u8;
 
-        // Segundo byte: los últimos 4 bits del u16 y el u8 (booleano)
-        let byte2 = ((num & 0x0F) << 4) as u8 | (boolean & 0x01);
+        // Segundo byte: los últimos 2 bits del u16 y el booleano
+        let byte2 = ((num & 0x03) << 6) as u8 | (boolean & 0x01);
 
         // Convertir los bytes a hexadecimal y añadir al string
         result.push_str(&format!("{:02X}{:02X}", byte1, byte2));
+    }
+
+    result
+}
+
+fn hex_string_to_vec(hex_string: &str) -> Vec<(u16, u8)> {
+    let mut result = Vec::new();
+
+    // Asegurarse de que la longitud de la cadena sea par
+    if hex_string.len() % 4 != 0 {
+        panic!("La longitud de la cadena debe ser múltiplo de 4");
+    }
+
+    // Iterar sobre la cadena en chunks de 4 caracteres (2 bytes)
+    for chunk in hex_string.as_bytes().chunks(4) {
+        // Convertir los dos primeros caracteres en un byte (byte1)
+        let byte1_str = std::str::from_utf8(&chunk[0..2]).unwrap();
+        let byte1 = u8::from_str_radix(byte1_str, 16).unwrap();
+
+        // Convertir los dos siguientes caracteres en un byte (byte2)
+        let byte2_str = std::str::from_utf8(&chunk[2..4]).unwrap();
+        let byte2 = u8::from_str_radix(byte2_str, 16).unwrap();
+
+        // Reconstruir el u16 (12 bits) y el booleano u8
+        //let num: u16 = ((byte1 as u16) << 4) | ((byte2 as u16) >> 4);
+        let num: u16 = (byte1 as u16) << 2 | (byte2 >> 6) as u16;
+        let boolean: u8 = byte2 & 0x01;
+
+        // Añadir el par (u16, u8) al resultado
+        result.push((num, boolean));
     }
 
     result
