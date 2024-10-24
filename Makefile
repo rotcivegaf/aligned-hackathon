@@ -11,6 +11,10 @@ build-game:
 	@echo "Building end user GAME"
 	cd $(GAME_FOLDER) && cargo build --release
 
+play-game:
+	@echo "Start user GAME"
+	cd $(GAME_FOLDER) && cargo run --release 
+
 build-elf:
 	@echo "Building ELF file"
 	cd $(PROGRAM_FOLDER) && cargo prove build && aligned get-vk-commitment --verification_key_file elf/riscv32im-succinct-zkvm-elf --proving_system SP1 2> elf/commitment
