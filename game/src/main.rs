@@ -24,10 +24,10 @@ struct GameState {
 
 #[derive(Serialize, Deserialize)]
 struct Output {
-    inputs: String,
-    score: u8,
-    win: bool,
-    end_frame: u16,
+    inputs: String, // All user keyboard inputs
+    score: u8, // Score of the use(5 for each defeat ship)
+    win: bool, // If the ship survives
+    end_frame: u16, // The final frame of the game(max 1023)
 }
 
 impl GameState {
@@ -255,28 +255,15 @@ fn main() {
         }
     });
 
-    //for (i, vector) in state.user_input.iter().enumerate() {
-    //    for (num, key) in vector {
-    //        println!("Vector {} - Número: {}, Key ID: {}", i, num, key);
-    //    }
-    //}
-
     let output = Output {
         inputs: vec_to_hex_string(state.user_input),
         score: state.score,
         win: state.lives > 0,
         end_frame: end_frame as u16,
     };
-    
-    println!("{}", output.inputs);
-    println!("{}", output.score);
-    println!("{}", output.win);
-    println!("{}", output.end_frame);
-
-    let user_output = hex_string_to_vec(&output.inputs);
-    println!("{:?}", user_output);
 
     let serialized = serde_json::to_string(&output).unwrap();
+    println!("Copy this JSON to run the prover:");
     println!("{}", serialized);
 }
 
@@ -295,36 +282,6 @@ fn vec_to_hex_string(input: Vec<(u16, u8)>) -> String {
 
         // Convertir los bytes a hexadecimal y añadir al string
         result.push_str(&format!("{:02X}{:02X}", byte1, byte2));
-    }
-
-    result
-}
-
-fn hex_string_to_vec(hex_string: &str) -> Vec<(u16, u8)> {
-    let mut result = Vec::new();
-
-    // Asegurarse de que la longitud de la cadena sea par
-    if hex_string.len() % 4 != 0 {
-        panic!("La longitud de la cadena debe ser múltiplo de 4");
-    }
-
-    // Iterar sobre la cadena en chunks de 4 caracteres (2 bytes)
-    for chunk in hex_string.as_bytes().chunks(4) {
-        // Convertir los dos primeros caracteres en un byte (byte1)
-        let byte1_str = std::str::from_utf8(&chunk[0..2]).unwrap();
-        let byte1 = u8::from_str_radix(byte1_str, 16).unwrap();
-
-        // Convertir los dos siguientes caracteres en un byte (byte2)
-        let byte2_str = std::str::from_utf8(&chunk[2..4]).unwrap();
-        let byte2 = u8::from_str_radix(byte2_str, 16).unwrap();
-
-        // Reconstruir el u16 (12 bits) y el booleano u8
-        //let num: u16 = ((byte1 as u16) << 4) | ((byte2 as u16) >> 4);
-        let num: u16 = (byte1 as u16) << 2 | (byte2 >> 6) as u16;
-        let boolean: u8 = byte2 & 0x01;
-
-        // Añadir el par (u16, u8) al resultado
-        result.push((num, boolean));
     }
 
     result

@@ -29,10 +29,10 @@ struct GameState {
 
 #[derive(Serialize, Deserialize)]
 struct Output {
-    inputs: String,
-    score: u8,
-    win: bool,
-    end_frame: u16,
+    inputs: String, // All user keyboard inputs
+    score: u8, // Score of the use(5 for each defeat ship)
+    win: bool, // If the ship survives
+    end_frame: u16, // The final frame of the game(max 1023)
 }
 
 impl GameState {

@@ -1,5 +1,5 @@
 PROGRAM_FOLDER = program
-GAME_FOLDER = script
+GAME_FOLDER = game
 PROVER_DIR = prove
 
 # Build targets
