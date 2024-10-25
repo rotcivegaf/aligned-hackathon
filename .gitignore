@@ -6,3 +6,5 @@
 /aligned_verification_data/
 /prove/proof.bin
 /game/target/
+/contracts/cache/solidity-files-cache.json
+/contracts/out/
