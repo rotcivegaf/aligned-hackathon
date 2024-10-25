@@ -1,6 +1,8 @@
 PROGRAM_FOLDER = program
 GAME_FOLDER = game
 PROVER_DIR = prove
+CONTRACT_ADDRESS=0x3Ec5C0A31D779cdEd116741bc3E0f2713E39CA14
+RPC_URL=https://ethereum-holesky-rpc.publicnode.com
 
 # Build targets
 all: build-game build-elf build-prover 
@@ -26,3 +28,9 @@ build-prover:
 proof:
 	@echo "Building PROVE files"
 	cd $(PROVER_DIR) && cargo build --bin space_aligners_bin --release && ./target/release/space_aligners_bin --prove --output '{"inputs":"0541058105C1078107C10C810CC10D01118111C1268126C12701418141C147C1480162C1630163417FC18001804180819E819EC1A7C1A801A841B141B181B1C1B880B8C0BAC0BB00BB40BB80","score":100,"win":true,"end_frame":849}'
+
+space_aligners:
+	@cd game && cargo run -r -- \
+		--keystore-path $(KEYSTORE_PATH) \
+ 		--rpc-url $(RPC_URL) \
+  		--leaderboard-verifier-contract-address $(CONTRACT_ADDRESS)

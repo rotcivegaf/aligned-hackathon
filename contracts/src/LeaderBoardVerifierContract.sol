@@ -5,16 +5,16 @@ import {ERC721} from "solmate/src/tokens/ERC721.sol";
 
 contract LeaderBoardVerifierContract is ERC721 {
     struct Score {
-        bytes inputs;
         uint256 score;
         bool win;
         uint256 endFrame;
+        bytes inputs;
     }
 
     address public alignedServiceManager = 0x58F280BeBE9B34c9939C3C39e0890C81f163B623;
     address public paymentServiceAddr = 0x815aeCA64a974297942D2Bbf034ABEe22a38A003;
 
-    bytes32 public elfCommitment = 0x1e0ca5c191d29678667120c91bfe6a78e34a11d895343a642f6438bc8ec11779;
+    bytes32 public elfCommitment = 0xd9cd413ee8f1e0e50f40e4a213a5d548700f8d568d61d404e6e63db3e6f5f3e5;
         
     error InvalidElf(bytes32 submittedElf); // c6d95066
 
@@ -33,14 +33,18 @@ contract LeaderBoardVerifierContract is ERC721 {
         bytes32 batchMerkleRoot,
         bytes memory merkleProof,
         uint256 verificationDataBatchIndex,
-        bytes memory pubInputBytes
+        // pubInputs
+        uint256 score,
+        bool win,
+        uint256 endFrame,
+        bytes memory inputs
     ) external returns (uint256) {
         if (elfCommitment != provingSystemAuxDataCommitment) {
             revert InvalidElf(provingSystemAuxDataCommitment);
         }
         
         require(
-            pubInputCommitment == keccak256(abi.encodePacked(pubInputBytes)),
+            pubInputCommitment == keccak256(abi.encodePacked(score, win, endFrame, inputs)),
             "public inputs don't match"
         );
 
@@ -83,17 +87,14 @@ contract LeaderBoardVerifierContract is ERC721 {
 
         mintedProofs[fullHash] = true;
 
-        Score memory score;
-        (
-            score.inputs, 
-            score.score, 
-            score.win, 
-            score.endFrame
-        ) = abi.decode(pubInputBytes, (bytes, uint256, bool, uint256));
-
         uint256 tokenId = uint256(fullHash);
         _mint(msg.sender, tokenId);
-        leaderboard[tokenId] = score;
+        leaderboard[tokenId] = Score(
+            score, 
+            win, 
+            endFrame,
+            inputs 
+        );
 
         return tokenId;
     }

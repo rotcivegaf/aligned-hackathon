@@ -8,3 +8,4 @@
 /game/target/
 /contracts/cache/solidity-files-cache.json
 /contracts/out/
+/contracts/cache/

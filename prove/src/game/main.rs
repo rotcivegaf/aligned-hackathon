@@ -44,10 +44,10 @@ struct GameState {
 
 #[derive(Serialize, Deserialize)]
 struct Output {
-    inputs: String,
     score: u8,
     win: bool,
     end_frame: u16,
+    inputs: String,
 }
 
 impl GameState {
@@ -191,10 +191,10 @@ fn main() -> std::io::Result<()> {
     let mut actual_frame: Vec<(u16, u8)> = get_and_remove_first_equal_numbers(&mut user_output);
     
     let mut state_output = Output {
-        inputs: String::new(),
         score: 0,
         win: false,
         end_frame: 0,
+        inputs: String::new(),
     };
 
     let mut frame_count = 0;
@@ -232,10 +232,6 @@ fn main() -> std::io::Result<()> {
     state_output.score = state.score;
     state_output.win = state.lives > 0;
 
-    if output.inputs != state_output.inputs {
-        eprintln!("Error: inputs don't match, {}, {}", output.inputs, state_output.inputs);
-        std::process::exit(1);
-    }
     if output.score != state_output.score {
         eprintln!("Error: score doesn't match, {}, {}", output.score, state_output.score);
         std::process::exit(1);
@@ -246,6 +242,10 @@ fn main() -> std::io::Result<()> {
     }
     if output.end_frame != (frame_count + 1) as u16 {
         eprintln!("Error: end_frame doesn't match, {}, {}", output.end_frame, frame_count);
+        std::process::exit(1);
+    }
+    if output.inputs != state_output.inputs {
+        eprintln!("Error: inputs don't match, {}, {}", output.inputs, state_output.inputs);
         std::process::exit(1);
     }
 
