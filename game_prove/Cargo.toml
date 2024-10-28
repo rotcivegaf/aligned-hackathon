@@ -1,0 +1,10 @@
+[package]
+name = "game_prove"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/game_prove.rs"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }

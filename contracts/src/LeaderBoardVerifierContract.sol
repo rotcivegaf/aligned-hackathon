@@ -5,17 +5,17 @@ import {ERC721} from "solmate/src/tokens/ERC721.sol";
 
 contract LeaderBoardVerifierContract is ERC721 {
     struct Score {
+        uint256 timestamp;
         uint256 score;
         bool win;
         uint256 endFrame;
-        bytes inputs;
     }
 
     address public alignedServiceManager = 0x58F280BeBE9B34c9939C3C39e0890C81f163B623;
     address public paymentServiceAddr = 0x815aeCA64a974297942D2Bbf034ABEe22a38A003;
 
-    bytes32 public elfCommitment = 0xd9cd413ee8f1e0e50f40e4a213a5d548700f8d568d61d404e6e63db3e6f5f3e5;
-        
+    bytes32 public elfCommitment = 0x7392ef74250ef5d90135ef96573db00bba367fd236184310f519e59ad33e42b9;
+
     error InvalidElf(bytes32 submittedElf); // c6d95066
 
     // map to check if proof has already been submitted
@@ -33,18 +33,14 @@ contract LeaderBoardVerifierContract is ERC721 {
         bytes32 batchMerkleRoot,
         bytes memory merkleProof,
         uint256 verificationDataBatchIndex,
-        // pubInputs
-        uint256 score,
-        bool win,
-        uint256 endFrame,
-        bytes memory inputs
+        bytes memory pubInput
     ) external returns (uint256) {
         if (elfCommitment != provingSystemAuxDataCommitment) {
             revert InvalidElf(provingSystemAuxDataCommitment);
         }
-        
+
         require(
-            pubInputCommitment == keccak256(abi.encodePacked(score, win, endFrame, inputs)),
+            pubInputCommitment == keccak256(abi.encodePacked(pubInput)),
             "public inputs don't match"
         );
 
@@ -64,7 +60,7 @@ contract LeaderBoardVerifierContract is ERC721 {
         require(!mintedProofs[fullHash], "proof already minted");
 
         (
-            bool callWasSuccessfull,
+            bool callWasSuccessful,
             bytes memory proofIsIncluded
         ) = alignedServiceManager.staticcall(
                 abi.encodeWithSignature(
@@ -80,7 +76,7 @@ contract LeaderBoardVerifierContract is ERC721 {
                 )
             );
 
-        require(callWasSuccessfull, "static_call failed");
+        require(callWasSuccessful, "static_call failed");
 
         bool proofIsIncludedBool = abi.decode(proofIsIncluded, (bool));
         require(proofIsIncludedBool, "proof not included in batch");
@@ -89,11 +85,13 @@ contract LeaderBoardVerifierContract is ERC721 {
 
         uint256 tokenId = uint256(fullHash);
         _mint(msg.sender, tokenId);
+        (uint256 score, bool win, uint256 endFrame) =
+            abi.decode(pubInput, (uint256, bool, uint256));
         leaderboard[tokenId] = Score(
-            score, 
-            win, 
-            endFrame,
-            inputs 
+            block.timestamp,
+            score,
+            win,
+            endFrame
         );
 
         return tokenId;
@@ -102,6 +100,6 @@ contract LeaderBoardVerifierContract is ERC721 {
     function tokenURI(
         uint256 tokenId
     ) public view virtual override returns (string memory) {
-        return "ipfs://";
+        return "ipfs://TODO";
     }
 }

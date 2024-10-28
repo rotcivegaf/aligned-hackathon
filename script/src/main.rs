@@ -10,15 +10,39 @@ use ethers::providers::{Http, Provider};
 use ethers::signers::{LocalWallet, Signer};
 use ethers::types::{Address, Bytes, H160, U256};
 use sp1_sdk::{ProverClient, SP1Stdin};
+use ethers::abi::{encode, Token};
 use serde::{Deserialize, Serialize};
 use hex;
 
-// main.rs
+// game.rs
 mod game;
+use game_prove::{GameIO};
 
 abigen!(LeaderBoardVerifierContract, "../contracts/out/LeaderBoardVerifierContract.sol/LeaderBoardVerifierContract.json",);
 
 const ELF: &[u8] = include_bytes!("../../program/elf/riscv32im-succinct-zkvm-elf");
+
+#[derive(Serialize, Deserialize)]
+struct PubInput {
+    score: u8,
+    win: bool,
+    end_frame: u16,
+    inputs: Vec<u8>,
+}
+impl PubInput {
+    pub fn encode_to_vec(&self) -> Vec<u8> {
+        // Convert struct fields into ABI-encodable tokens
+        let tokens = vec![
+            Token::Uint(self.score.into()),
+            Token::Uint(U256::from(if self.win { 1 } else { 0 })),
+            Token::Uint(self.end_frame.into()),
+            Token::Bytes(self.inputs.clone()),
+        ];
+
+        // Encode the tokens into bytes
+        Bytes::from(encode(&tokens)).to_vec()
+    }
+}
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -64,26 +88,19 @@ async fn main() {
     if Confirm::with_theme(&dialoguer::theme::ColorfulTheme::default())
         .with_prompt("Do you want to deposit 0.004eth in Aligned ?\nIf you already deposited Ethereum to Aligned before, this is not needed")
         .interact()
-        .expect("Failed to read user input") {   
-
-        deposit_to_aligned(U256::from(4000000000000000u128), signer.clone(), args.network).await
-        .expect("Failed to pay for proof submission");
-    }
+        .expect("Failed to read user input") {
+            deposit_to_aligned(U256::from(4000000000000000u128), signer.clone(), args.network).await
+                .expect("Failed to pay for proof submission");
+        }
 
     // Generate proof.
-    let output_json = game::game_main();
+    let game_i_json = game::game_play();
 
     let mut stdin = SP1Stdin::new();
-    stdin.write(&output_json);
+    stdin.write(&game_i_json);
 
-    let output: Output = serde_json::from_str(&output_json).unwrap();
-    let inputs_bytes = hex::decode(output.inputs).unwrap();
-
-
-    //let output: Output = serde_json::from_str(&output_json);
-    //let pub_input = hex::decode(&output.inputs);   
-
-    println!("Vector de bytes: {:?}", inputs_bytes);
+    let game_i: GameIO = serde_json::from_str(&game_i_json).unwrap();
+    let inputs_bytes = hex::decode(&game_i.inputs).unwrap();
 
     println!("Generating Proof ");
 
@@ -105,13 +122,21 @@ async fn main() {
     // Serialize proof into bincode (format used by sp1)
     let proof = bincode::serialize(&proof).expect("Failed to serialize proof");
 
+    let pub_input_struct = PubInput {
+        score: game_i.score,
+        win: game_i.win,
+        end_frame: game_i.end_frame,
+        inputs: inputs_bytes,
+    };
+    let encoded_vec: Vec<u8> = pub_input_struct.encode_to_vec();
+
     let verification_data = VerificationData {
         proving_system: ProvingSystemId::SP1,
         proof,
         proof_generator_addr: wallet.address(),
         vm_program_code: Some(ELF.to_vec()),
         verification_key: None,
-        pub_input: None,
+        pub_input: Some(encoded_vec.clone()),
     };
 
     let max_fee = estimate_fee(&rpc_url, PriceEstimate::Instant)
@@ -144,16 +169,11 @@ async fn main() {
     .await
     .unwrap();
 
-    println!(
-        "Proof submitted and verified successfully on batch 0x{}",
-        hex::encode(aligned_verification_data.batch_merkle_root)
-    );
-
     println!("Claiming NFT prize...");
-    
+
     claim_nft_with_verified_proof(
         &aligned_verification_data,
-        output_json,
+        encoded_vec,
         signer,
         &args.leaderboard_verifier_contract_address,
     )
@@ -163,22 +183,10 @@ async fn main() {
 
 async fn claim_nft_with_verified_proof(
     aligned_verification_data: &AlignedVerificationData,
-    output_json: String,
+    encoded_vec: Vec<u8>,
     signer: SignerMiddleware<Provider<Http>, LocalWallet>,
     leaderboard_verifier_contract_addr: &Address,
 ) -> anyhow::Result<()> {
-    let pub_input_bytes = json_to_ethers_bytes(&output_json);
-    println!("{:?}", pub_input_bytes); // este andaba!!!!
-    println!("");
-
-    let output: Output = serde_json::from_str(&output_json).unwrap();
-    println!("{:?}", output.score);
-    println!("{:?}", output.win);
-    println!("{:?}", output.end_frame);
-    println!("{:?}", output.inputs);
-
-    let hex_inputs = Bytes::from(hex::decode(output.inputs).unwrap());
-
     let leaderboard_verifier_contract = LeaderBoardVerifierContract::new(*leaderboard_verifier_contract_addr, signer.into());
 
     let index_in_batch = U256::from(aligned_verification_data.index_in_batch);
@@ -190,11 +198,6 @@ async fn claim_nft_with_verified_proof(
             .concat()
             .to_vec(),
     );
-
-    println!("PARAMMM:{:?}", aligned_verification_data
-    .verification_data_commitment
-    .pub_input_commitment
-);
 
     let receipt = leaderboard_verifier_contract
         .verify_batch_inclusion(
@@ -213,10 +216,7 @@ async fn claim_nft_with_verified_proof(
             aligned_verification_data.batch_merkle_root,
             merkle_path,
             index_in_batch,
-            ethers::types::U256::from(output.score),
-            output.win,
-            ethers::types::U256::from(output.end_frame) ,
-            hex_inputs,
+            encoded_vec.into(),
         )
         .send()
         .await
@@ -236,36 +236,4 @@ async fn claim_nft_with_verified_proof(
             anyhow::bail!("Failed to claim prize: no receipt");
         }
     }
-}
-
-
-#[derive(Serialize, Deserialize)]
-struct Output {
-    score: u8,
-    win: bool,
-    end_frame: u16,
-    inputs: String,
-}
-
-fn json_to_ethers_bytes(json_data: &str) -> Bytes {
-    // Convertir el JSON a la estructura Output
-    let output: Output = serde_json::from_str(json_data).unwrap();
-
-    // Convertir el campo "inputs" de hexadecimal a bytes
-    let inputs_bytes = hex::decode(output.inputs).unwrap();
-
-    // Convertir score, win y end_frame a bytes
-    let score_byte = output.score.to_be_bytes();
-    let win_byte = if output.win { [0x01] } else { [0x00] };
-    let end_frame_bytes = output.end_frame.to_be_bytes();
-
-    // Combinar todos los bytes en un solo vector
-    let mut result_bytes = Vec::new();
-    result_bytes.extend_from_slice(&inputs_bytes);
-    result_bytes.extend_from_slice(&score_byte);
-    result_bytes.extend_from_slice(&win_byte);
-    result_bytes.extend_from_slice(&end_frame_bytes);
-
-    // Convertir el vector a Bytes de ethers y devolverlo
-    Bytes::from(result_bytes)
 }
