@@ -4,7 +4,9 @@ pragma solidity ^0.8.12;
 import {ERC721} from "solmate/src/tokens/ERC721.sol";
 
 contract LeaderBoardVerifierContract is ERC721 {
-    struct Score {
+    event SubmitScore(GameScore gameScore);
+
+    struct GameScore {
         uint256 timestamp;
         uint256 score;
         bool win;
@@ -21,7 +23,7 @@ contract LeaderBoardVerifierContract is ERC721 {
     // map to check if proof has already been submitted
     mapping(bytes32 => bool) public mintedProofs;
 
-    mapping(uint256 => Score) public leaderboard;
+    mapping(uint256 => GameScore) public leaderboard;
 
     constructor() ERC721("Space Aligners", "SA") {}
 
@@ -87,12 +89,15 @@ contract LeaderBoardVerifierContract is ERC721 {
         _mint(msg.sender, tokenId);
         (uint256 score, bool win, uint256 endFrame) =
             abi.decode(pubInput, (uint256, bool, uint256));
-        leaderboard[tokenId] = Score(
+        GameScore memory gameScore = GameScore(
             block.timestamp,
             score,
             win,
             endFrame
         );
+
+        leaderboard[tokenId] = gameScore;
+        emit SubmitScore(gameScore);
 
         return tokenId;
     }

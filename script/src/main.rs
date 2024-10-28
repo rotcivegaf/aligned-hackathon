@@ -83,6 +83,8 @@ async fn main() {
         .expect("Failed to decrypt keystore")
         .with_chain_id(chain_id.as_u64());
 
+    println!("Wallet Sender: {:?}", wallet.address());
+
     let signer = SignerMiddleware::new(provider.clone(), wallet.clone());
 
     if Confirm::with_theme(&dialoguer::theme::ColorfulTheme::default())
@@ -93,9 +95,10 @@ async fn main() {
                 .expect("Failed to pay for proof submission");
         }
 
-    // Generate proof.
+    // Play Game
     let game_i_json = game::game_play();
 
+    // Generate proof.
     let mut stdin = SP1Stdin::new();
     stdin.write(&game_i_json);
 
@@ -168,6 +171,11 @@ async fn main() {
     )
     .await
     .unwrap();
+
+    println!(
+        "Proof submitted and verified successfully on batch {}",
+        hex::encode(aligned_verification_data.batch_merkle_root)
+    );
 
     println!("Claiming NFT prize...");
 
