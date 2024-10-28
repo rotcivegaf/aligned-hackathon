@@ -13,18 +13,9 @@ struct PubInput {
     pub inputs: String, // All user keyboard inputs
 }
 
-//fn main() -> std::io::Result<()> {
 fn main() {
     let zkinput = sp1_zkvm::io::read::<String>();
     let game_i: GameIO = serde_json::from_str(&zkinput).unwrap();
-
-    // commit the score
-    sp1_zkvm::io::commit::<PubInput>(&PubInput {
-        score: game_i.score,
-        win: game_i.win,
-        end_frame: game_i.end_frame,
-        inputs: game_i.inputs.clone(),
-    });
 
     let game_o = game_prove(&game_i.inputs);
 

@@ -14,7 +14,7 @@ contract LeaderBoardVerifierContract is ERC721 {
     address public alignedServiceManager = 0x58F280BeBE9B34c9939C3C39e0890C81f163B623;
     address public paymentServiceAddr = 0x815aeCA64a974297942D2Bbf034ABEe22a38A003;
 
-    bytes32 public elfCommitment = 0x7392ef74250ef5d90135ef96573db00bba367fd236184310f519e59ad33e42b9;
+    bytes32 public elfCommitment = 0x56242d07385540795c6babba8c9d829c0eca00059de30badc3e294186a6dca83;
 
     error InvalidElf(bytes32 submittedElf); // c6d95066
 
