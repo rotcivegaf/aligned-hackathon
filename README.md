@@ -66,6 +66,33 @@ Change the [`KEYSTORE_PATH`](https://github.com/rotcivegaf/aligned-hackathon/blo
 make space_aligners
 ```
 
+## Project structure
+
+```css
+aligned-hackathon/
+├── contracts/
+│   ├── src/
+│   │   └── LeaderBoardVerifierContract.sol // The verifier contract
+│   └── ...
+├── game_prove/
+│   ├── src/
+│   │   └── game_prove.rs // The base game prover without graphics(used in program and script)
+│   └── ...
+├── program/
+│   ├── elf/
+│   │   └── commitment // To cache the commitment hash
+│   │   └── riscv32im-succinct-zkvm-elf // ELF file
+│   ├── src/
+│   │   └── main.rs // Used to create the ELF file to prove the game
+│   └── ...
+├── script/
+│   ├── src/
+│   │   ├── game.rs // Game file
+│   │   └── main.rs // Used to play the game, create/submit the proof and mint the leaderboard NFT
+│   └── ...
+└── Makefile // To send the commands build and play
+```
+
 ## Contracts and transactions
 
 - LeaderBoardVerifierContract: [0xdc6c4ca2638b498676924110b511a1e255bd2fc3](https://holesky.etherscan.io/address/0xdc6c4ca2638b498676924110b511a1e255bd2fc3)
@@ -82,10 +109,13 @@ Win, Score: 100, End Frame: 833, transaction:
 
 ## An overview of the challenges faced during development and key design considerations
 
-Eh tenido varios retos, creo que el primero es leer la documentacion y entender realmente como funciona ZK y Aligned
-No soy experto en rust asique ese fue otro problema
-Sobre la documentacion de Aligned, me fue muy dificil instalar SP1 hasta que di con la documentacion de SP1 y usando el metodo de la opcion 2 lo pude instalar, quizas deverian recomendar esta solucion
-vi que hace poco actualizaron el repositorio de ejemplo de [yetanotherco/aligned_layer](https://github.com/yetanotherco/aligned_layer), no tuve tiempo de ver la nueva version pero se me hizo dificil entender el ejemplo del quiz y como enviar public inputs al contrato verifier
+I have faced several challenges; I think the first one was reading the documentation and truly understanding how ZK and Aligned work.
+
+I’m not an expert in Rust, so that was another issue.
+
+Regarding the Aligned documentation, I found it very difficult to install SP1 until I came across the documentation for SP1. Using the method from option 2, I was able to install it; perhaps they should recommend this solution.
+
+I noticed that they recently updated the example repository from [yetanotherco/aligned_layer](https://github.com/yetanotherco/aligned_layer). I didn’t have time to look at the new version, but I found it challenging to understand the quiz example and how to send public inputs to the verifier contract.
 
 ## What next(What else needs to be added to make the project production-ready) and project roadmap
 
